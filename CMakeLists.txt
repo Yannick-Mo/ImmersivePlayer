@@ -11,12 +11,13 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# 第三方库根目录（可通过 -D 命令行覆盖）
-set(YAROLIBS_DIR "D:/YaroLibS" CACHE PATH "Path to YaroLibS third-party libraries")
-set(FFMPEG_DIR "D:/YaroLibS/ffmpeg_win64_shared" CACHE PATH "Path to FFmpeg shared libraries")
+# 第三方库路径（每个库可独立配置，通过 -D 命令行覆盖）
+set(GLM_DIR    "D:/YaroLibS/glm"                CACHE PATH "Path to GLM (header-only math library)")
+set(ASSIMP_DIR "D:/YaroLibS/Assimp"             CACHE PATH "Path to Assimp library root")
+set(FFMPEG_DIR "D:/YaroLibS/ffmpeg_win64_shared" CACHE PATH "Path to FFmpeg shared libraries root")
 
 # 查找 Qt 组件
-find_package(Qt6 REQUIRED COMPONENTS
+find_package(Qt6 REQUIRED COMPONENTS 
     Widgets
     OpenGL
     OpenGLWidgets
@@ -52,13 +53,13 @@ endif()
 # 头文件目录
 target_include_directories(ImmersivePlayer PRIVATE
     ${CMAKE_SOURCE_DIR}/src
-    ${YAROLIBS_DIR}/glm
-    ${YAROLIBS_DIR}/Assimp/include
+    ${GLM_DIR}
+    ${ASSIMP_DIR}/include
 )
 
 # 链接库
 target_link_libraries(ImmersivePlayer PRIVATE
-    ${YAROLIBS_DIR}/Assimp/lib/assimp-vc143-mt.lib
+    ${ASSIMP_DIR}/lib/assimp-vc143-mt.lib
     opengl32.lib
     FFmpeg::avformat
     FFmpeg::avcodec
@@ -69,19 +70,14 @@ target_link_libraries(ImmersivePlayer PRIVATE
     Qt6::OpenGLWidgets
 )
 
-# 着色器热重载选项
-option(IMMERSIVEPLAYER_SHADER_HOT_RELOAD "Enable shader hot-reload" ON)
-if(IMMERSIVEPLAYER_SHADER_HOT_RELOAD)
-    target_compile_definitions(ImmersivePlayer PRIVATE IMMERSIVEPLAYER_SHADER_HOT_RELOAD)
-endif()
-
 # 构建后复制 Assimp DLL
 add_custom_command(TARGET ImmersivePlayer POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${YAROLIBS_DIR}/Assimp/bin/assimp-vc143-mt.dll"
+        "${ASSIMP_DIR}/bin/assimp-vc143-mt.dll"
         "$<TARGET_FILE_DIR:ImmersivePlayer>/"
     COMMENT "Copying assimp DLL"
 )
+ 
 # 构建后复制 FFmpeg DLL
 add_custom_command(TARGET ImmersivePlayer POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -91,30 +87,10 @@ add_custom_command(TARGET ImmersivePlayer POST_BUILD
         "${FFMPEG_DIR}/bin/avformat-62.dll"
         "$<TARGET_FILE_DIR:ImmersivePlayer>/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${FFMPEG_DIR}/bin/avutil-60.dll"
+        "${FFMPEG_DIR}/bin/avutil-60.dll" 
         "$<TARGET_FILE_DIR:ImmersivePlayer>/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${FFMPEG_DIR}/bin/swscale-9.dll"
         "$<TARGET_FILE_DIR:ImmersivePlayer>/"
     COMMENT "Copying FFmpeg DLLs"
 )
-
-# 复制着色器目录（如果存在）
-if(EXISTS "${CMAKE_SOURCE_DIR}/shaders")
-    add_custom_command(TARGET ImmersivePlayer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/shaders"
-            "$<TARGET_FILE_DIR:ImmersivePlayer>/shaders"
-        COMMENT "Copying shaders to build directory"
-    )
-endif()
-
-# 复制资源目录（如果存在）
-if(EXISTS "${CMAKE_SOURCE_DIR}/resources")
-    add_custom_command(TARGET ImmersivePlayer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/resources"
-            "$<TARGET_FILE_DIR:ImmersivePlayer>/resources"
-        COMMENT "Copying resources to build directory"
-    )
-endif()
