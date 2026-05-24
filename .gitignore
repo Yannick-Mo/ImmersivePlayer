@@ -1,0 +1,132 @@
+# ====================
+# Build Directories
+# ====================
+build/
+cmake-build-*/
+out/
+bin/
+obj/
+lib/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# Ninja
+.ninja_*
+build.ninja
+rules.ninja
+
+# Visual Studio (MSVC)
+*.sdf
+*.opensdf
+*.suo
+*.user
+*.vcxproj.*
+*.vcxproj.filters
+*.vcxproj
+*.vcproj
+*.sln
+*.pdb
+*.ilk
+*.tlog
+*.lastbuildstate
+ipch/
+
+# ====================
+# IDE & Editor
+# ====================
+# VSCode
+.vscode/
+*.code-workspace
+
+# Qt Creator
+.qtcreator/
+*.user
+
+# CLion / IntelliJ
+.idea/
+*.iml
+
+# Visual Studio Code / Vim / Emacs
+*.swp
+*.swo
+*~
+*.bak
+
+# ====================
+# Cache & Temporary
+# ====================
+.cache/
+.clangd/
+.clang-tidy
+*.pch
+*.orig
+
+# ====================
+# OS Files
+# ====================
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.directory
+
+# ====================
+# Runtime & Generated
+# ====================
+*.log
+*.tmp
+*.temp
+*.pid
+*.lock
+*.pid.lock
+
+# ====================
+# Documentation (if auto-generated)
+# ====================
+docs/
+
+# ====================
+# Package & Dependency
+# ====================
+vcpkg/
+conanfile.txt.user
+packages/
+*.tar.gz
+*.zip
+*.7z
+
+# ====================
+# Debug/Release Specific
+# ====================
+debug/
+release/
+MinSizeRel/
+RelWithDebInfo/
+
+# ====================
+# Qt Specific
+# ====================
+*.qmake.stash
+*.pro.user*
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+.qmake.cache
