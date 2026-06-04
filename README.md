@@ -4,6 +4,12 @@
 
 将普通视频融入到 3D 场景中播放，提供身临其境的观影体验。支持演唱会、电影院、科技广场等多种沉浸式场景，以及普通播放模式。
 
+<p align="center">
+  <a href="EffectDemonstration/test.mp4">
+    <img src="EffectDemonstration/thumbnail.png" alt="效果演示" width="800">
+  </a>
+</p>
+
 ---
 
 ## 功能特性
