@@ -103,6 +103,9 @@ add_custom_command(TARGET ImmersivePlayer POST_BUILD
 )
 
 # ── 安装规则 ──────────────────────────────────────────
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
+include(InstallRequiredSystemLibraries)
+
 install(TARGETS ImmersivePlayer
     RUNTIME DESTINATION .
     BUNDLE  DESTINATION .
