@@ -7,6 +7,8 @@ out/
 bin/
 obj/
 lib/
+build_release/
+_CPack_Packages/
 
 # CMake
 CMakeCache.txt
@@ -130,3 +132,11 @@ moc_*.cpp
 ui_*.h
 qrc_*.cpp
 .qmake.cache
+
+# ====================
+# Generated Installer
+# ====================
+ImmersivePlayer-*-win64.exe
+
+# PreviewTest (empty placeholder)
+PreviewTest/

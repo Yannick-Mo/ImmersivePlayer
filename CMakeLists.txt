@@ -41,7 +41,8 @@ file(GLOB_RECURSE SOURCES
 )
 
 # 创建可执行文件
-add_executable(ImmersivePlayer ${SOURCES})
+add_executable(ImmersivePlayer ${SOURCES} app.rc)
+set_target_properties(ImmersivePlayer PROPERTIES WIN32_EXECUTABLE TRUE)
 
 # 全局预处理器定义
 if(MSVC)
@@ -94,3 +95,35 @@ add_custom_command(TARGET ImmersivePlayer POST_BUILD
         "$<TARGET_FILE_DIR:ImmersivePlayer>/"
     COMMENT "Copying FFmpeg DLLs"
 )
+
+# ── 安装规则 ──────────────────────────────────────────
+install(TARGETS ImmersivePlayer
+    RUNTIME DESTINATION .
+    BUNDLE  DESTINATION .
+)
+
+install(FILES
+    "${ASSIMP_DIR}/bin/assimp-vc143-mt.dll"
+    "${FFMPEG_DIR}/bin/avcodec-62.dll"
+    "${FFMPEG_DIR}/bin/avformat-62.dll"
+    "${FFMPEG_DIR}/bin/avutil-60.dll"
+    "${FFMPEG_DIR}/bin/swscale-9.dll"
+    DESTINATION .
+)
+
+# ── CPack ─────────────────────────────────────────────
+set(CPACK_GENERATOR "NSIS")
+set(CPACK_PACKAGE_NAME "ImmersivePlayer")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VENDOR "ImmersivePlayer")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Immersive 3D Video Player")
+set(CPACK_NSIS_DISPLAY_NAME "ImmersivePlayer ${PROJECT_VERSION}")
+set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
+set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+set(CPACK_NSIS_CREATE_ICONS_EXTRA
+    "CreateShortCut '$SMPROGRAMS/$STARTMENU_FOLDER/ImmersivePlayer.lnk' '$INSTDIR/ImmersivePlayer.exe'"
+)
+set(CPACK_NSIS_DELETE_ICONS_EXTRA
+    "Delete '$SMPROGRAMS/$STARTMENU_FOLDER/ImmersivePlayer.lnk'"
+)
+include(CPack)
