@@ -6,8 +6,22 @@
 
 <p align="center">
   <a href="EffectDemonstration/test.mp4">
-    <img src="EffectDemonstration/thumbnail.png" alt="效果演示" width="800">
+    <img src="EffectDemonstration/主界面.png" alt="效果演示" width="800">
   </a>
+</p>
+
+### 效果截图
+
+<p align="center">
+  <img src="EffectDemonstration/主界面.png" alt="主界面" width="45%">
+  <img src="EffectDemonstration/普通播放.png" alt="普通播放" width="45%">
+</p>
+<p align="center">
+  <img src="EffectDemonstration/演唱会.png" alt="演唱会场景" width="45%">
+  <img src="EffectDemonstration/电影院.png" alt="电影院场景" width="45%">
+</p>
+<p align="center">
+  <img src="EffectDemonstration/科技城.png" alt="科技广场场景" width="45%">
 </p>
 
 ---
