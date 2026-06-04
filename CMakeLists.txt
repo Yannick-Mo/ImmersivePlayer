@@ -93,6 +93,12 @@ add_custom_command(TARGET ImmersivePlayer POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${FFMPEG_DIR}/bin/swscale-9.dll"
         "$<TARGET_FILE_DIR:ImmersivePlayer>/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${FFMPEG_DIR}/bin/swresample-6.dll"
+        "$<TARGET_FILE_DIR:ImmersivePlayer>/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${FFMPEG_DIR}/bin/avfilter-11.dll"
+        "$<TARGET_FILE_DIR:ImmersivePlayer>/"
     COMMENT "Copying FFmpeg DLLs"
 )
 
@@ -108,6 +114,8 @@ install(FILES
     "${FFMPEG_DIR}/bin/avformat-62.dll"
     "${FFMPEG_DIR}/bin/avutil-60.dll"
     "${FFMPEG_DIR}/bin/swscale-9.dll"
+    "${FFMPEG_DIR}/bin/swresample-6.dll"
+    "${FFMPEG_DIR}/bin/avfilter-11.dll"
     DESTINATION .
 )
 
