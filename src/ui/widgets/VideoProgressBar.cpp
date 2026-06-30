@@ -77,14 +77,31 @@ void VideoProgressBar::paintEvent(QPaintEvent *) {
 void VideoProgressBar::mouseMoveEvent(QMouseEvent *event) {
     if (width() <= 0) return;
     m_hoverPos = event->position().x() / width();
-    emit previewAt(m_hoverPos);
+    if (m_dragging) {
+        double ratio = qBound(0.0, m_hoverPos, 1.0);
+        m_progress = ratio;
+        emit seekRequested(ratio);
+    } else {
+        emit previewAt(m_hoverPos);
+    }
     update();
 }
 
 void VideoProgressBar::mousePressEvent(QMouseEvent *event) {
     if (width() <= 0) return;
+    m_dragging = true;
     double ratio = event->position().x() / width();
     emit seekRequested(qBound(0.0, ratio, 1.0));
+    update();
+}
+
+void VideoProgressBar::mouseReleaseEvent(QMouseEvent *event) {
+    if (!m_dragging) return;
+    m_dragging = false;
+    if (width() > 0) {
+        double ratio = event->position().x() / width();
+        emit seekRequested(qBound(0.0, ratio, 1.0));
+    }
     update();
 }
 

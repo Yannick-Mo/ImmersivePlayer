@@ -18,11 +18,13 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void leaveEvent(QEvent *event) override;
 
 private:
     double m_progress  = 0.0;
     double m_buffered  = 0.0;
     double m_hoverPos  = -1.0;
+    bool m_dragging    = false;
     QString m_previewText;
 };
