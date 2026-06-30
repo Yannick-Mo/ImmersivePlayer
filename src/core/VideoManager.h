@@ -10,6 +10,7 @@
 class VideoDecoder;
 class AudioDecoder;
 class AudioRenderer;
+class Demuxer;
 
 class VideoManager {
 public:
@@ -66,6 +67,7 @@ private:
     void stopAudioPipeline();
     void stopAudioFeedThread();
 
+    std::unique_ptr<Demuxer> m_demuxer;
     std::unique_ptr<VideoDecoder> m_decoder;
     std::unique_ptr<AudioDecoder> m_audioDecoder;
     std::unique_ptr<AudioRenderer> m_audioRenderer;
@@ -83,19 +85,13 @@ private:
     std::thread m_audioFeedThread;
     std::atomic<bool> m_audioFeeding{false};
     std::atomic<bool> m_audioAvailable{false};
-
-    // If true, the file has an audio stream but no output device was available
-    // at init time. Allows deferred audio start when a device appears.
     std::atomic<bool> m_audioStreamExists{false};
 
-    // Seek 节流：防止快速连续拖动导致线程乒乓
     std::mutex m_seekMutex;
-    std::atomic<int64_t> m_lastSeekTime{0};  // ms
+    std::atomic<int64_t> m_lastSeekTime{0};
 
-    // Audio pipeline 状态防竞态
     std::mutex m_audioPipelineMutex;
 
-    // 缓冲检测
     mutable std::atomic<int64_t> m_lastNewFrameTime{0};
     mutable std::atomic<uint64_t> m_frameSequence{0};
 };

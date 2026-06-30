@@ -440,7 +440,7 @@ void OpenGLWidget::initializeGL() {
 
     m_refreshTimer = new QTimer(this);
     connect(m_refreshTimer, &QTimer::timeout, this, [this]() { update(); });
-    m_refreshTimer->start(16);
+    m_refreshTimer->start(24);
 
     m_frameTimer.start();
 }

@@ -10,8 +10,7 @@ extern "C" {
 ScreenModel::ScreenModel(float width, float height)
     : m_width(width)
     , m_height(height)
-{
-}
+{}
 
 ScreenModel::~ScreenModel() {
     // FFmpeg 资源可在析构函数释放（无需 GL context）

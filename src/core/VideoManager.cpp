@@ -1,4 +1,5 @@
 #include "VideoManager.h"
+#include "Demuxer.h"
 #include "video/VideoDecoder.h"
 #include "audio/AudioDecoder.h"
 #include "audio/AudioRenderer.h"
@@ -11,7 +12,8 @@ extern "C" {
 }
 
 VideoManager::VideoManager()
-    : m_decoder(std::make_unique<VideoDecoder>())
+    : m_demuxer(std::make_unique<Demuxer>())
+    , m_decoder(std::make_unique<VideoDecoder>())
     , m_audioDecoder(std::make_unique<AudioDecoder>())
     , m_audioRenderer(std::make_unique<AudioRenderer>())
 {
@@ -25,28 +27,43 @@ VideoManager::~VideoManager() {
 
 bool VideoManager::open(const std::string& url) {
     std::lock_guard<std::recursive_mutex> lock(m_openMutex);
-
     m_lastUrl = url;
-
-    // 先清理旧状态
     close();
 
-    if (!m_decoder->open(url))
+    if (!m_demuxer->open(url))
         return false;
 
-    m_audioStreamExists = m_audioDecoder->open(url);
+    m_decoder->open(
+        m_demuxer->getVideoCodecParameters(),
+        m_demuxer->getVideoTimeBase()
+    );
+
+    m_audioStreamExists = (m_demuxer->getAudioStreamIndex() >= 0);
     m_audioAvailable = false;
 
     if (m_audioStreamExists) {
-        m_audioAvailable = m_audioRenderer->init(
-            m_audioDecoder->getSampleRate(),
-            m_audioDecoder->getChannels(),
-            m_speed.load()
-        );
-        if (!m_audioAvailable) {
-            qWarning() << "VideoManager: audio stream present but no output device — video-only mode";
+        if (m_audioDecoder->open(
+                m_demuxer->getAudioCodecParameters(),
+                m_demuxer->getAudioTimeBase()))
+        {
+            m_audioAvailable = m_audioRenderer->init(
+                m_audioDecoder->getSampleRate(),
+                m_audioDecoder->getChannels(),
+                m_speed.load()
+            );
+            if (!m_audioAvailable) {
+                qWarning() << "VideoManager: audio stream present but no output device — video-only mode";
+            }
         }
     }
+
+    m_decoder->start(m_demuxer->getVideoPacketQueue(), &m_demuxer->m_eofReached);
+
+    if (m_audioAvailable) {
+        m_audioDecoder->start(m_demuxer->getAudioPacketQueue(), &m_demuxer->m_eofReached);
+    }
+
+    m_demuxer->start();
 
     return true;
 }
@@ -55,9 +72,11 @@ void VideoManager::close() {
     std::lock_guard<std::recursive_mutex> lock(m_openMutex);
 
     stopAudioFeedThread();
+    m_demuxer->stop();
     m_audioDecoder->close();
     m_audioRenderer->stop();
     m_decoder->close();
+    m_demuxer->close();
     {
         std::lock_guard<std::mutex> frameLock(m_frameMutex);
         m_currentPts = 0;
@@ -71,14 +90,12 @@ void VideoManager::close() {
 
 void VideoManager::cancelOpen() {
     std::lock_guard<std::recursive_mutex> lock(m_openMutex);
-    m_decoder->cancel();
-    if (m_audioDecoder) m_audioDecoder->cancel();
+    m_demuxer->cancel();
 }
 
 // ── Playback control ────────────────────────────────────────────────────────
 
 void VideoManager::play() {
-    // 直播流暂停后需重新打开（避免累积延迟）；open() 已启动解码器
     {
         std::string reopenUrl;
         bool needReopen = false;
@@ -95,15 +112,13 @@ void VideoManager::play() {
                 qWarning() << "VideoManager: live stream reopen failed, entering stopped state";
                 return;
             }
-            // open() 已将解码器置为播放状态，直接进入音频管线
         }
     }
 
     if (!m_decoder->isRunning()) return;
 
-    m_decoder->play();
+    m_decoder->resume();
 
-    // 音频管线保护：避免在未初始化时启动
     if (m_audioAvailable && m_audioDecoder->isRunning()) {
         if (m_audioFeeding)
             return;
@@ -117,13 +132,9 @@ void VideoManager::play() {
 }
 
 void VideoManager::pause() {
-    if (!m_decoder->isRunning()) {
-        // 解码器未运行（例如正在加载中），忽略暂停
-        return;
-    }
+    if (!m_decoder->isRunning()) return;
     m_decoder->pause();
 
-    // 音频管线保护：确保在锁内操作
     {
         std::lock_guard<std::mutex> lock(m_audioPipelineMutex);
         if (m_audioFeeding)
@@ -147,13 +158,10 @@ void VideoManager::seek(double ratio) {
     if (dur <= 0) return;
     int64_t target = static_cast<int64_t>(ratio * dur);
 
-    // 节流：如果两次 seek 间隔小于 50ms，直接跳过此操作
     auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
     int64_t last = m_lastSeekTime.load();
-    if (last > 0 && (now - last) < 50) {
-        return;  // 真正跳过 seek 操作
-    }
+    if (last > 0 && (now - last) < 50) return;
     m_lastSeekTime = now;
 
     bool wasPaused = m_decoder->isPaused();
@@ -171,18 +179,18 @@ void VideoManager::seek(double ratio) {
             stopAudioPipeline();
         }
 
-        m_audioDecoder->setInterruptSeek(true);
-        {
-            struct Guard { AudioDecoder* d; ~Guard() { if (d) d->setInterruptSeek(false); } } guard{m_audioDecoder.get()};
-            m_audioDecoder->seek(target);
-        }
+        m_demuxer->seek(target);
+
+        m_decoder->seek();
+        m_audioDecoder->seek();
 
         if (!wasPaused) {
             startAudioPipeline();
         }
+    } else {
+        m_demuxer->seek(target);
+        m_decoder->seek();
     }
-
-    m_decoder->seek(target);
 }
 
 void VideoManager::seekForward(int64_t us) {
@@ -212,9 +220,8 @@ void VideoManager::setSpeed(double speed) {
 void VideoManager::applySpeed(double speed) {
     m_speed = speed;
 
-    // 根据播放速度调整帧队列容量，高倍速时增大缓冲
     if (speed >= 1.5) {
-        m_decoder->setFrameQueueMaxSize(static_cast<int>(speed * 8));  // 2x→16, 4x→32
+        m_decoder->setFrameQueueMaxSize(static_cast<int>(speed * 8));
     } else {
         m_decoder->setFrameQueueMaxSize(5);
     }
@@ -222,17 +229,20 @@ void VideoManager::applySpeed(double speed) {
     if (!m_audioAvailable || !m_audioFeeding) return;
 
     std::lock_guard<std::mutex> lock(m_audioPipelineMutex);
-
     if (!m_audioFeeding) return;
 
     int64_t savedPosition = m_audioRenderer->getCustomClock() + m_audioClockOffset;
 
-    stopAudioPipeline();
-
-    m_audioDecoder->seek(savedPosition);
+    stopAudioFeedThread();
+    m_audioDecoder->stop();
+    m_audioDecoder->clearFrames();
+    m_audioRenderer->stop();
 
     m_audioClockOffset = savedPosition;
-    m_audioDecoder->start();
+
+    m_demuxer->getAudioPacketQueue()->clear();
+
+    m_audioDecoder->start(m_demuxer->getAudioPacketQueue(), &m_demuxer->m_eofReached);
     m_audioRenderer->init(
         m_audioDecoder->getSampleRate(),
         m_audioDecoder->getChannels(),
@@ -287,7 +297,7 @@ double VideoManager::getProgress() const {
 }
 
 int64_t VideoManager::getDuration() const {
-    return m_decoder ? m_decoder->getDuration() : 0;
+    return m_demuxer ? m_demuxer->getDuration() : 0;
 }
 
 int VideoManager::getWidth() const {
@@ -299,8 +309,8 @@ int VideoManager::getHeight() const {
 }
 
 bool VideoManager::isLiveStream() const {
-    if (!m_decoder || !m_decoder->isRunning()) return false;
-    return getDuration() <= 0;
+    if (!m_demuxer || !m_demuxer->isRunning()) return false;
+    return m_demuxer->getDuration() <= 0;
 }
 
 // ── Audio feed ──────────────────────────────────────────────────────────────
@@ -333,7 +343,7 @@ void VideoManager::audioFeedLoop() {
 
 void VideoManager::startAudioPipeline() {
     m_audioClockOffset = m_currentPts.load();
-    m_audioDecoder->start();
+    m_audioDecoder->start(m_demuxer->getAudioPacketQueue(), &m_demuxer->m_eofReached);
     m_audioRenderer->init(
         m_audioDecoder->getSampleRate(),
         m_audioDecoder->getChannels(),
@@ -370,14 +380,14 @@ bool VideoManager::tryRecoverAudio() {
     m_audioDecoder->stop();
     m_audioRenderer->stop();
 
+    m_demuxer->getAudioPacketQueue()->clear();
+
+    m_audioDecoder->start(m_demuxer->getAudioPacketQueue(), &m_demuxer->m_eofReached);
+
     if (!m_audioRenderer->reinitialize()) {
         qWarning() << "VideoManager: audio recovery failed";
         return false;
     }
-
-    m_audioDecoder->start();
-    if (m_currentPts > 0)
-        m_audioDecoder->seek(m_currentPts);
 
     m_audioRenderer->start();
     m_audioClockOffset = m_currentPts.load();
@@ -411,10 +421,6 @@ bool VideoManager::getCurrentFrame(FramePtr& outFrame, int timeoutMs) {
     }
 
     if (effectiveClock >= 0) {
-        // Post-seek guard: if the audio clock is far ahead of the visible
-        // video PTS, the decoder is still catching up from the keyframe
-        // before the seek target. Fall back to PTS-based throttling until
-        // the video catches up.
         int64_t lastPts = m_currentPts.load(std::memory_order_relaxed);
         if (effectiveClock > lastPts + 300000) {
             effectiveClock = -1;
@@ -426,12 +432,12 @@ bool VideoManager::getCurrentFrame(FramePtr& outFrame, int timeoutMs) {
         if (m_decoder->peekFrame(peeked) && peeked && peeked->pts != AV_NOPTS_VALUE) {
             int64_t framePts = av_rescale_q(
                 peeked->pts,
-                m_decoder->getStreamTimeBase(),
+                m_decoder->getTimeBase(),
                 AVRational{1, 1000000}
             );
 
             int64_t diff = framePts - effectiveClock;
-            const int64_t SYNC_THRESHOLD = 50000;
+            const int64_t SYNC_THRESHOLD = 20000;
 
             if (diff > SYNC_THRESHOLD) {
                 if (m_lastFrame) {
@@ -448,7 +454,7 @@ bool VideoManager::getCurrentFrame(FramePtr& outFrame, int timeoutMs) {
                     ++skipped;
                     int64_t pts = av_rescale_q(
                         outFrame->pts,
-                        m_decoder->getStreamTimeBase(),
+                        m_decoder->getTimeBase(),
                         AVRational{1, 1000000}
                     );
                     if (pts >= effectiveClock - 10000) break;
@@ -456,7 +462,7 @@ bool VideoManager::getCurrentFrame(FramePtr& outFrame, int timeoutMs) {
                 if (skipped > 0 && outFrame && outFrame->data[0]) {
                     m_currentPts = av_rescale_q(
                         outFrame->pts,
-                        m_decoder->getStreamTimeBase(),
+                        m_decoder->getTimeBase(),
                         AVRational{1, 1000000}
                     );
                     m_lastFrame = outFrame;
@@ -478,20 +484,20 @@ bool VideoManager::getCurrentFrame(FramePtr& outFrame, int timeoutMs) {
             if (m_lastFrame && m_lastFrame->pts != AV_NOPTS_VALUE && outFrame && outFrame->pts != AV_NOPTS_VALUE) {
                 int64_t lastPts = av_rescale_q(
                     m_lastFrame->pts,
-                    m_decoder->getStreamTimeBase(),
+                    m_decoder->getTimeBase(),
                     AVRational{1, 1000000}
                 );
                 int64_t currentPts = av_rescale_q(
                     outFrame->pts,
-                    m_decoder->getStreamTimeBase(),
+                    m_decoder->getTimeBase(),
                     AVRational{1, 1000000}
                 );
                 int64_t ptsDiff = currentPts - lastPts;
-                int64_t targetInterval = static_cast<int64_t>(1000000.0 / 30.0 / m_speed.load());
+                int64_t targetInterval = static_cast<int64_t>(1000000.0 / 50.0 / m_speed.load());
                 if (ptsDiff < targetInterval) {
-                    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    auto t = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::steady_clock::now().time_since_epoch()).count();
-                    m_lastNewFrameTime = now;
+                    m_lastNewFrameTime = t;
                     outFrame = m_lastFrame;
                     return true;
                 }
@@ -502,7 +508,7 @@ bool VideoManager::getCurrentFrame(FramePtr& outFrame, int timeoutMs) {
         if (raw->pts != AV_NOPTS_VALUE) {
             m_currentPts = av_rescale_q(
                 raw->pts,
-                m_decoder->getStreamTimeBase(),
+                m_decoder->getTimeBase(),
                 AVRational{1, 1000000}
             );
         }

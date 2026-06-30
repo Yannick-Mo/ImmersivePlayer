@@ -1,12 +1,12 @@
 #pragma once
 
-#include <string>
 #include <queue>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
 #include <thread>
-#include <memory>
+
+class PacketQueue;
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -19,44 +19,44 @@ public:
     AudioDecoder();
     ~AudioDecoder();
 
-    bool open(const std::string& url);
+    bool open(AVCodecParameters* codecParams, AVRational timeBase);
     void close();
-    void start();
+
+    void start(PacketQueue* packetQueue, std::atomic<bool>* eofFlag);
     void stop();
-    void seek(int64_t ptsMicroseconds);
-    void cancel();
-    void setInterruptSeek(bool seeking);
+
+    void seek();
+    void clearFrames();
+
+    bool popFrame(AVFrame*& out, int timeoutMs = 0);
 
     int getSampleRate() const { return m_sampleRate; }
     int getChannels() const { return m_channels; }
     AVSampleFormat getSampleFormat() const { return m_sampleFmt; }
-    int64_t getDuration() const;
     bool isRunning() const { return m_running; }
-
-    bool popFrame(AVFrame*& out, int timeoutMs = 0);
-
-    static int interruptCallback(void *ctx);
 
 private:
     void decodeLoop();
 
-    AVFormatContext* m_formatCtx;
-    AVCodecContext* m_codecCtx;
-    int m_audioStreamIndex;
+    AVCodecContext* m_codecCtx = nullptr;
+    PacketQueue* m_packetQueue = nullptr;
+    std::atomic<bool>* m_eofFlag = nullptr;
+    AVRational m_timeBase{0, 0};
 
-    int m_sampleRate;
-    int m_channels;
-    AVSampleFormat m_sampleFmt;
-
-    std::thread m_decodeThread;
-    std::atomic<bool> m_running;
-    std::atomic<bool> m_cancelled{false};
-    std::atomic<bool> m_interruptSeek{false};
+    int m_sampleRate = 0;
+    int m_channels = 0;
+    AVSampleFormat m_sampleFmt = AV_SAMPLE_FMT_NONE;
 
     std::queue<AVFrame*> m_frames;
     mutable std::mutex m_mutex;
     std::condition_variable m_cond;
-    std::mutex m_seekCloseMutex;  // serializes seek() / close() to prevent use-after-free
+
+    std::thread m_decodeThread;
+    std::atomic<bool> m_running{false};
+    std::atomic<bool> m_flushDecoder{false};
+
+    mutable std::mutex m_closeMutex;
+    bool m_closed{false};
 
     AudioDecoder(const AudioDecoder&) = delete;
     AudioDecoder& operator=(const AudioDecoder&) = delete;

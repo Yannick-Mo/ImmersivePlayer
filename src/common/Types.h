@@ -2,7 +2,7 @@
 #include <QString>
 
 enum class SceneType {
-    Concert,     // 演唱会 (已实现)
+    Concert,     // 演唱会 
     TechPlaza,   // 科技广场
     Cinema,      // 电影院
     Normal       // 普通播放

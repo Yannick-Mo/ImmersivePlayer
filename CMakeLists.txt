@@ -7,14 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Qt 自动 MOC、UIC、RCC
-set(CMAKE_AUTOMOC ON) 
+set(CMAKE_AUTOMOC ON)  
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 # 第三方库路径（每个库可独立配置，通过 -D 命令行覆盖）
-set(GLM_DIR    "D:/YaroLibS/glm"                CACHE PATH "Path to GLM (header-only math library)")
-set(ASSIMP_DIR "D:/YaroLibS/Assimp"             CACHE PATH "Path to Assimp library root")
-set(FFMPEG_DIR "D:/YaroLibS/ffmpeg_win64_shared" CACHE PATH "Path to FFmpeg shared libraries root")
+set(GLM_DIR    "D:/YannickLibS/glm"                CACHE PATH "Path to GLM (header-only math library)")
+set(ASSIMP_DIR "D:/YannickLibS/Assimp"             CACHE PATH "Path to Assimp library root")
+set(FFMPEG_DIR "D:/YannickLibS/ffmpeg_win64_shared" CACHE PATH "Path to FFmpeg shared libraries root")
 
 # 查找 Qt 组件
 find_package(Qt6 REQUIRED COMPONENTS 
